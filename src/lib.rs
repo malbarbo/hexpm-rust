@@ -9,9 +9,7 @@ use crate::proto::{signed::Signed, versions::Versions};
 use bytes::buf::Buf;
 use flate2::read::GzDecoder;
 use http::{Method, StatusCode};
-use lazy_static::lazy_static;
 use prost::Message;
-use regex::Regex;
 use ring::digest::{Context, SHA256};
 use serde::Deserialize;
 use serde_json::json;
@@ -953,15 +951,27 @@ pub struct Dependency {
 
 static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), " (", env!("CARGO_PKG_VERSION"), ")");
 
-fn validate_package_and_version(package: &str, version: &str) -> Result<(), ApiError> {
-    lazy_static! {
-        static ref PACKAGE_PATTERN: Regex = Regex::new(r"^[a-z]\w*$").unwrap();
-        static ref VERSION_PATTERN: Regex = Regex::new(r"^[a-zA-Z-0-9\._-]+$").unwrap();
+fn is_valid_package_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some('a'..='z') => {}
+        _ => return false,
     }
-    if !PACKAGE_PATTERN.is_match(package) {
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn is_valid_version_string(version: &str) -> bool {
+    !version.is_empty()
+        && version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
+}
+
+fn validate_package_and_version(package: &str, version: &str) -> Result<(), ApiError> {
+    if !is_valid_package_name(package) {
         return Err(ApiError::InvalidPackageNameFormat(package.to_string()));
     }
-    if !VERSION_PATTERN.is_match(version) {
+    if !is_valid_version_string(version) {
         return Err(ApiError::InvalidVersionFormat(version.to_string()));
     }
     Ok(())
